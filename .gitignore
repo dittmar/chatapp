@@ -90,7 +90,8 @@ fastlane/test_output
 iOSInjectionProject/
 
 # Python
-*.pyc
+__pycache__/
+migrations/__pycache__/
 
 # SQLite
 test.db
