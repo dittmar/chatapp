@@ -6,7 +6,6 @@ Create Date: 2021-12-31 00:51:53.368768
 
 """
 from alembic import op
-import sqlalchemy as sqlalchemy
 import chat_tables as tables
 
 # revision identifiers, used by Alembic.
