@@ -52,7 +52,7 @@ async def list_users(request):
         for result in results
     ]
     return JSONResponse(content)
-    
+
 @app.route("/users", methods=["POST"])
 async def create_user(request):
     """
@@ -80,7 +80,25 @@ async def create_user(request):
     await _database.execute(query)
     return Response()
 
-#async def list_messages(request):
+@app.route("/messages/list/{receiver_id:int}", methods=["POST"])
+async def list_messages(request):
+    """
+        responses:
+            200:
+                description: return all messages in the system
+                content:
+                    application/json:
+                        schema:
+                            type: array
+                            items:
+                                type: object
+                                properties:
+                                    message:
+                                        type: string
+                                    sender:
+                                        type: string
+    """
+    return JSONResponse([{"receiver_id": request.path_params["receiver_id"]}])
 #    data = await request.json()
 #    query = tables.message_table.select().where(
 #        sqlalchemy.and_(
@@ -99,7 +117,7 @@ async def send_message(request):
             required: true
             content:
                 application/json:
-                    schema: MessageParameter
+                    schema: SendMessageParameter
     """
     #data = await request.json()
     #query = tables.message_table.insert().values(
@@ -111,7 +129,7 @@ async def send_message(request):
 class UserParameter(Schema):
     username = fields.Str(nullable=False)
 
-class MessageParameter(Schema):
+class SendMessageParameter(Schema):
     message = fields.Str(nullable=False)
     senderId = fields.Int()
     receiverId = fields.Int(nullable=True)
