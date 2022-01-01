@@ -1,20 +1,49 @@
-import databases
+from apispec import APISpec
+from databases import Database
 from starlette.applications import Starlette
 from starlette.config import Config
 from starlette.responses import JSONResponse
 from starlette.responses import Response
-from starlette.routing import Route
+from starlette_apispec import APISpecSchemaGenerator
+
 from schema import user_table, message_table
 
 # We need to import metadata so that the server will run happily
 from schema import metadata
 
+schemas = APISpecSchemaGenerator(
+    APISpec(
+        title="Chat API",
+        version="1.0",
+        openapi_version="3.0.2"
+    )
+)
+
 # Configuration from environment variables or '.env' file.
 _config = Config('.env')
 DATABASE_URL = _config('DATABASE_URL')
-_database = databases.Database(DATABASE_URL)
+_database = Database(DATABASE_URL)
 
+app = Starlette(
+    on_startup=[_database.connect],
+    on_shutdown=[_database.disconnect]
+)
+
+@app.route("/schema", methods=["GET"], include_in_schema=False)
+def schema(request):
+    return schemas.OpenAPIResponse(request=request)
+
+@app.route("/users", methods=["POST"])
 async def create_user(request):
+    """
+        responses:
+            200:
+                description: user created successfully
+            400:
+                description: username already taken
+        body:
+            { "username": "some username" }
+    """
     data = await request.json()
     # Return a Bad Request error if the username is already taken
     if await _database.fetch_one(user_table.select().where(user_table.columns.username == data["username"])):
@@ -28,7 +57,25 @@ async def create_user(request):
     await _database.execute(query)
     return Response()
 
+@app.route("/users", methods=["GET"])
 async def list_users(request):
+    """
+        responses:
+            200:
+                description: return all users in the system
+                examples:
+                    [
+                        {
+                            "id": 1,
+                            "username": "dittmar"
+                        },
+                        {
+                            "id": 2,
+                            "username": "storborg"
+                        }
+                    ]
+
+    """
     query = user_table.select()
     results = await _database.fetch_all(query)
 
@@ -81,14 +128,3 @@ async def list_users(request):
 #        "text": data["text"],
 #        "completed": data["completed"]
 #    })
-
-routes = [
-    Route("/users", endpoint=list_users, methods=["GET"]),
-    Route("/users", endpoint=create_user, methods=["POST"])
-]
-
-app = Starlette(
-    routes=routes,
-    on_startup=[_database.connect],
-    on_shutdown=[_database.disconnect]
-)
