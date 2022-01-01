@@ -6,7 +6,7 @@ Create Date: 2021-12-31 00:51:53.368768
 
 """
 from alembic import op
-import chat_tables as tables
+from schema import message_table, user_table
 
 # revision identifiers, used by Alembic.
 revision = 'a79cdd25befc'
@@ -16,16 +16,16 @@ depends_on = None
 
 def upgrade():
     op.create_table(
-        tables.user_table.name,
-        *tables.user_table.columns
+        user_table.name,
+        *user_table.columns
     )
 
     op.create_table(
-        tables.message_table.name,
-        *tables.message_table.columns
+        message_table.name,
+        *message_table.columns
     )
 
 
 def downgrade():
-    op.drop_table(tables.message_table.name)
-    op.drop_table(tables.user_table.name)
+    op.drop_table(message_table.name)
+    op.drop_table(user_table.name)

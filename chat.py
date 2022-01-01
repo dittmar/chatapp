@@ -4,31 +4,32 @@ from starlette.config import Config
 from starlette.responses import JSONResponse
 from starlette.responses import Response
 from starlette.routing import Route
+from schema import user_table, message_table
 
-import chat_tables as tables
+# We need to import metadata so that the server will run happily
+from schema import metadata
 
 # Configuration from environment variables or '.env' file.
 _config = Config('.env')
 DATABASE_URL = _config('DATABASE_URL')
 _database = databases.Database(DATABASE_URL)
-metadata = tables.metadata
 
 async def create_user(request):
     data = await request.json()
     # Return a Bad Request error if the username is already taken
-    if await _database.fetch_one(tables.user_table.select().where(tables.user_table.columns.username == data["username"])):
+    if await _database.fetch_one(user_table.select().where(user_table.columns.username == data["username"])):
         return Response(
             content="username already taken",
             status_code=400
         )
-    query = tables.user_table.insert().values(
+    query = user_table.insert().values(
         username=data["username"]
     )
     await _database.execute(query)
     return Response()
 
 async def list_users(request):
-    query = tables.user_table.select()
+    query = user_table.select()
     results = await _database.fetch_all(query)
 
     content = [

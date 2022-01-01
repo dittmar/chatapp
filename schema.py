@@ -1,5 +1,4 @@
 import sqlalchemy as sqlalchemy
-from sqlalchemy import sql
 
 metadata = sqlalchemy.MetaData()
 
