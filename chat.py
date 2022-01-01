@@ -13,15 +13,6 @@ from schema import user_table, message_table
 # We need to import metadata so that the server will run happily
 from schema import metadata
 
-schemas = APISpecSchemaGenerator(
-    APISpec(
-        title="Chat API",
-        version="1.0",
-        openapi_version="3.0.2",
-        plugins=[MarshmallowPlugin()]
-    )
-)
-
 # Configuration from environment variables or '.env' file.
 _config = Config('.env')
 DATABASE_URL = _config('DATABASE_URL')
@@ -31,45 +22,6 @@ app = Starlette(
     on_startup=[_database.connect],
     on_shutdown=[_database.disconnect]
 )
-
-class UserParameter(Schema):
-    username = fields.Str(nullable=False)
-
-class MessageParameter(Schema):
-    message = fields.Str(nullable=False)
-    senderId = fields.Int()
-    receiverId = fields.Int(nullable=True)
-
-@app.route("/schema", methods=["GET"], include_in_schema=False)
-def schema(request):
-    return schemas.OpenAPIResponse(request=request)
-
-@app.route("/users", methods=["POST"])
-async def create_user(request):
-    """
-        requestBody:
-            required: true
-            content:
-                application/json:
-                    schema: UserParameter
-        responses:
-            200:
-                description: user created successfully
-            400:
-                description: username already taken
-    """
-    data = await request.json()
-    # Return a Bad Request error if the username is already taken
-    if await _database.fetch_one(user_table.select().where(user_table.columns.username == data["username"])):
-        return Response(
-            content="username already taken",
-            status_code=400
-        )
-    query = user_table.insert().values(
-        username=data["username"]
-    )
-    await _database.execute(query)
-    return Response()
 
 @app.route("/users", methods=["GET"])
 async def list_users(request):
@@ -100,6 +52,33 @@ async def list_users(request):
         for result in results
     ]
     return JSONResponse(content)
+    
+@app.route("/users", methods=["POST"])
+async def create_user(request):
+    """
+        requestBody:
+            required: true
+            content:
+                application/json:
+                    schema: UserParameter
+        responses:
+            200:
+                description: user created successfully
+            400:
+                description: username already taken
+    """
+    data = await request.json()
+    # Return a Bad Request error if the username is already taken
+    if await _database.fetch_one(user_table.select().where(user_table.columns.username == data["username"])):
+        return Response(
+            content="username already taken",
+            status_code=400
+        )
+    query = user_table.insert().values(
+        username=data["username"]
+    )
+    await _database.execute(query)
+    return Response()
 
 #async def list_messages(request):
 #    data = await request.json()
@@ -127,3 +106,25 @@ async def send_message(request):
     #    senderId=data["senderId"],
     #    receiverId=data["receiverId"]
     #)
+
+# For generating the OpenAPI schema
+class UserParameter(Schema):
+    username = fields.Str(nullable=False)
+
+class MessageParameter(Schema):
+    message = fields.Str(nullable=False)
+    senderId = fields.Int()
+    receiverId = fields.Int(nullable=True)
+
+schemas = APISpecSchemaGenerator(
+    APISpec(
+        title="Chat API",
+        version="1.0",
+        openapi_version="3.0.2",
+        plugins=[MarshmallowPlugin()]
+    )
+)
+
+@app.route("/schema", methods=["GET"], include_in_schema=False)
+def schema(request):
+    return schemas.OpenAPIResponse(request=request)
