@@ -1,5 +1,7 @@
 from apispec import APISpec
+from apispec.ext.marshmallow import MarshmallowPlugin
 from databases import Database
+from marshmallow import Schema, fields
 from starlette.applications import Starlette
 from starlette.config import Config
 from starlette.responses import JSONResponse
@@ -15,7 +17,8 @@ schemas = APISpecSchemaGenerator(
     APISpec(
         title="Chat API",
         version="1.0",
-        openapi_version="3.0.2"
+        openapi_version="3.0.2",
+        plugins=[MarshmallowPlugin()]
     )
 )
 
@@ -29,6 +32,14 @@ app = Starlette(
     on_shutdown=[_database.disconnect]
 )
 
+class UserParameter(Schema):
+    username = fields.Str(nullable=False)
+
+class MessageParameter(Schema):
+    message = fields.Str(nullable=False)
+    senderId = fields.Int()
+    receiverId = fields.Int(nullable=True)
+
 @app.route("/schema", methods=["GET"], include_in_schema=False)
 def schema(request):
     return schemas.OpenAPIResponse(request=request)
@@ -36,13 +47,16 @@ def schema(request):
 @app.route("/users", methods=["POST"])
 async def create_user(request):
     """
+        requestBody:
+            required: true
+            content:
+                application/json:
+                    schema: UserParameter
         responses:
             200:
                 description: user created successfully
             400:
                 description: username already taken
-        body:
-            { "username": "some username" }
     """
     data = await request.json()
     # Return a Bad Request error if the username is already taken
@@ -63,18 +77,17 @@ async def list_users(request):
         responses:
             200:
                 description: return all users in the system
-                examples:
-                    [
-                        {
-                            "id": 1,
-                            "username": "dittmar"
-                        },
-                        {
-                            "id": 2,
-                            "username": "storborg"
-                        }
-                    ]
-
+                content:
+                    application/json:
+                        schema:
+                            type: array
+                            items:
+                                type: object
+                                properties:
+                                    id:
+                                        type: integer
+                                    username:
+                                        type: string
     """
     query = user_table.select()
     results = await _database.fetch_all(query)
@@ -97,34 +110,20 @@ async def list_users(request):
 #        )
 #    )
 
-#async def send_message(request):
-#    data = await request.json()
-#    query = tables.message_table.insert().values(
-#        senderId=data["senderId"],
-#        receiverId=data["receiverId"]
-#    )
-
-# Main application code.
-#async def list_notes(request):
-#    query = notes.select()
-#    results = await database.fetch_all(query)
-#    content = [
-#        {
-#            "text": result["text"],
-#            "completed": result["completed"]
-#        }
-#        for result in results
-#    ]
-#    return JSONResponse(content)
-
-#async def add_note(request):
-#    data = await request.json()
-#    query = notes.insert().values(
-#       text=data["text"],
-#       completed=data["completed"]
-#    )
-#    await database.execute(query)
-#    return JSONResponse({
-#        "text": data["text"],
-#        "completed": data["completed"]
-#    })
+@app.route("/messages/send", methods=["POST"])
+async def send_message(request):
+    """
+        responses:
+            200:
+                description: message sent successfully
+        requestBody:
+            required: true
+            content:
+                application/json:
+                    schema: MessageParameter
+    """
+    #data = await request.json()
+    #query = tables.message_table.insert().values(
+    #    senderId=data["senderId"],
+    #    receiverId=data["receiverId"]
+    #)
