@@ -65,6 +65,9 @@ async def login(request: Request) -> Response:
         responses:
             200:
                 description: user exists; logged in
+                content:
+                    application/json:
+                        schema: UserResponse
             400:
                 description: user does not exist
     """
@@ -200,17 +203,21 @@ async def send_message(request: Request) -> Response:
     return Response()
 
 # For generating the OpenAPI schema
-class UserParameter(Schema):
-    username = fields.Str()
+class ListMessageParameter(Schema):
+    senderId = fields.Int(nullable=True)
+    receiverId = fields.Int(nullable=True)
 
 class SendMessageParameter(Schema):
     message = fields.Str()
     senderId = fields.Int()
     receiverId = fields.Int(nullable=True)
 
-class ListMessageParameter(Schema):
-    senderId = fields.Int(nullable=True)
-    receiverId = fields.Int(nullable=True)
+class UserParameter(Schema):
+    username = fields.Str()
+
+class UserResponse(Schema):
+    id = fields.Int()
+    username = fields.Str()
 
 schemas = APISpecSchemaGenerator(
     APISpec(
