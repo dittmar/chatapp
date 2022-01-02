@@ -2,9 +2,6 @@ from apispec import APISpec
 from apispec.ext.marshmallow import MarshmallowPlugin
 from databases import Database
 from marshmallow import Schema, fields
-from sqlalchemy import and_
-from sqlalchemy.sql.expression import select
-from sqlalchemy.util.langhelpers import NoneType
 from starlette.applications import Starlette
 from starlette.config import Config
 from starlette.requests import Request
@@ -57,7 +54,44 @@ async def list_users(request):
     ]
     return JSONResponse(content)
 
-@app.route("/users", methods=["POST"])
+@app.route("/users/login", methods=["POST"])
+async def login(request: Request) -> Response:
+    """
+        requestBody:
+            required: true
+            content:
+                application/json:
+                    schema: UserParameter
+        responses:
+            200:
+                description: user exists; logged in
+            400:
+                description: user does not exist
+    """
+    try:
+        data = await request.json()
+    except:
+        return Response(
+            content="no username given",
+            status_code=400
+        )
+    user = await _database.fetch_one(user_table.select().where(user_table.columns.username == data["username"]))
+    
+    # Return a Bad Request error if the user does not exist
+    if not user:
+        return Response(
+            content="user does not exist",
+            status_code=400
+        )
+
+    # Convert the row into a JSON payload
+    content = {}
+    for column_name in map(lambda column: column.name, user_table.columns):
+        content[column_name] = getattr(user, column_name)
+    return JSONResponse(content)
+
+
+@app.route("/users/create", methods=["POST"])
 async def create_user(request: Request) -> Response:
     """
         requestBody:
@@ -157,7 +191,6 @@ async def send_message(request: Request) -> Response:
     """
     data = await request.json()
 
-    print(data["message"])
     query = message_table.insert().values(
         message=data["message"],
         senderId=data["senderId"],
