@@ -84,6 +84,8 @@ async def create_user(request: Request) -> Response:
     await _database.execute(query)
     return Response()
 
+# TODO (dittmar): This might need some tweaking and possibly to be separated into multiple endpoints
+# to deal with global room, groups, and private messages better
 @app.route("/messages/list", methods=["POST"])
 async def list_messages(request: Request) -> JSONResponse:
     """
@@ -111,24 +113,31 @@ async def list_messages(request: Request) -> JSONResponse:
                                         nullable: true
     """
 
-    query = message_table.select()
+    # Use a raw SQL query because it's simpler than SQLAlchemy methods for this query
+    query = """
+    SELECT message, sender.username, receiver.username
+    FROM messages
+    LEFT JOIN users AS sender on sender.id = messages.senderId
+    LEFT JOIN users AS receiver on receiver.id = messages.receiverId
+    """
+
     try:
         data = await request.json()
-        query = query.where(
-            and_(
-                message_table.columns.senderId==data["senderId"] if "senderId" in data else True,
-                message_table.columns.receiverId==data["receiverId"] if "receiverId" in data else True
-            )
+        # If we have a senderId and/or a receiverId, we want to filter the messages returned
+        # to only include ones for that sender and receiver pair
+        query = query + "WHERE {} AND {}".format(
+            "senderId = :senderId" if "senderId" in data else "TRUE",
+            "receiverId = :receiverId" if "receiverId" in data else "TRUE"
         )
     except:
-        pass
+        data = {}
+    results = await _database.fetch_all(query=query, values=data)
 
-    results = await _database.fetch_all(query)
     content = [
         {
-            "message": result["message"],
-            "senderId": result["senderId"],
-            "receiverId": result["receiverId"]
+            "message": result[0],
+            "senderId": result[1],
+            "receiverId": result[2]
         }
         for result in results
     ]
