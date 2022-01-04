@@ -1,6 +1,7 @@
 from apispec import APISpec
 from apispec.ext.marshmallow import MarshmallowPlugin
 from databases import Database
+from keygen import generate_key, generate_salt
 from marshmallow import Schema, fields
 from starlette.applications import Starlette
 from starlette.config import Config
@@ -25,7 +26,7 @@ app = Starlette(
 )
 
 @app.route("/users", methods=["GET"])
-async def list_users(request):
+async def list_users(request) -> JSONResponse:
     """
         responses:
             200:
@@ -71,26 +72,29 @@ async def login(request: Request) -> Response:
             400:
                 description: user does not exist
     """
+    invalid_credentials_response = Response(content="invalid username or password", status_code=400)
     try:
         data = await request.json()
+        if not ("username" in data and "password" in data):
+            return invalid_credentials_response
     except:
-        return Response(
-            content="no username given",
-            status_code=400
-        )
+        return invalid_credentials_response
     user = await _database.fetch_one(user_table.select().where(user_table.columns.username == data["username"]))
     
     # Return a Bad Request error if the user does not exist
-    if not user:
-        return Response(
-            content="user does not exist",
-            status_code=400
-        )
+    invalid_credentials_response = Response(content="invalid username or password", status_code=400)
 
-    # Convert the row into a JSON payload
-    content = {}
-    for column_name in map(lambda column: column.name, user_table.columns):
-        content[column_name] = getattr(user, column_name)
+    if not user:
+        return invalid_credentials_response
+
+    if user.hashed_password != generate_key(data["password"], user.salt):
+        return invalid_credentials_response
+    
+    # Convert the row into a JSON payload with only the data we want to return
+    content = [{
+        "id": user.id,
+        "username": user.username,
+    }]
     return JSONResponse(content)
 
 
@@ -109,20 +113,30 @@ async def create_user(request: Request) -> Response:
                 description: username already taken
     """
     data = await request.json()
+    # Return a Bad Request error if we're missing a username or password
+    if not ("username" in data and "password" in data):
+        return Response(
+            content="requires username and password",
+            status_code=400
+        )
     # Return a Bad Request error if the username is already taken
     if await _database.fetch_one(user_table.select().where(user_table.columns.username == data["username"])):
         return Response(
             content="username already taken",
             status_code=400
         )
+    
+    salt = generate_salt()
+    password = data['password']
+    
     query = user_table.insert().values(
-        username=data["username"]
+        username=data["username"],
+        salt=salt,
+        hashed_password=generate_key(password, salt)
     )
     await _database.execute(query)
     return Response()
 
-# TODO (dittmar): This might need some tweaking and possibly to be separated into multiple endpoints
-# to deal with global room, groups, and private messages better
 @app.route("/messages/list", methods=["POST"])
 async def list_messages(request: Request) -> JSONResponse:
     """
@@ -216,6 +230,7 @@ class SendMessageParameter(Schema):
 
 class UserParameter(Schema):
     username = fields.Str()
+    password = fields.Str()
 
 class UserResponse(Schema):
     id = fields.Int()
