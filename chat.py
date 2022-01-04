@@ -133,7 +133,7 @@ async def list_messages(request: Request) -> JSONResponse:
                     schema: ListMessageParameter
         responses:
             200:
-                description: return all messages in the system
+                description: return main room messages if no body was passed in.  Otherwise, return the messages between the sender and the receiver
                 content:
                     application/json:
                         schema:
@@ -162,12 +162,14 @@ async def list_messages(request: Request) -> JSONResponse:
         data = await request.json()
         # If we have a senderId and/or a receiverId, we want to filter the messages returned
         # to only include ones for that sender and receiver pair
-        query = query + "WHERE {} AND {}".format(
-            "senderId = :senderId" if "senderId" in data else "TRUE",
-            "receiverId = :receiverId" if "receiverId" in data else "TRUE"
-        )
+        if "senderId" in data and "receiverId" in data:
+            query += "WHERE {} AND {}".format("senderId = :senderId", "receiverId = :receiverId")
+        # If we don't have the right data, treat it like we have no data
+        else:
+            raise ValueError("Body must include both senderId and receiverId if it includes one of them")
     except:
         data = {}
+        query += "WHERE receiverId is NULL"
     results = await _database.fetch_all(query=query, values=data)
 
     content = [
