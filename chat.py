@@ -110,7 +110,7 @@ async def create_user(request: Request) -> Response:
             200:
                 description: user created successfully
             400:
-                description: username already taken
+                description: requires username and password if missing data or username already taken if username is unavailable
     """
     data = await request.json()
     # Return a Bad Request error if we're missing a username or password
