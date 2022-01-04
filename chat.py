@@ -91,10 +91,10 @@ async def login(request: Request) -> Response:
         return invalid_credentials_response
     
     # Convert the row into a JSON payload with only the data we want to return
-    content = [{
+    content = {
         "id": user.id,
         "username": user.username,
-    }]
+    }
     return JSONResponse(content)
 
 
