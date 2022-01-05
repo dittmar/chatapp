@@ -49,8 +49,9 @@ async def list_friends(request) -> JSONResponse:
     SELECT friendId, username
     FROM user_friends
     JOIN users ON friendId = users.id
+    WHERE userId = :userId
     """
-    results = await _database.fetch_all(query=query)
+    results = await _database.fetch_all(query=query, values={"userId": userId})
 
     content = [
         {
@@ -71,24 +72,51 @@ async def add_friend(request) -> Response:
                         schema: UserFriendAddParameter
         responses:
             200:
-                description: user exists; added as friend
+                description: user exists; added as friend and returns the friend
+                content:
+                    application/json:
+                        schema:
+                            type: array
+                            items:
+                                type: object
+                                properties:
+                                    id:
+                                        type: integer
+                                    username:
+                                        type: string
             400:
                 description: friend user does not exist
     """
+    no_user_response = Response(content="no such user exists", status_code=400)
     try:
         data = await request.json()
         if not ("userId" in data and "friendName" in data and data["friendName"].strip()):
-            return Response(content="no such user exists", status_code=400)
+            return no_user_response
     except:
         return Response(content="username of friend is required")
 
-    friend = await _database.fetch_one(user_table.select().where(user_table.columns.username == data["friendName"]))
-    query = user_friends_table.insert().values(
-        userId=data['userId'],
-        friendId=friend.id
-    )
-    await _database.execute(query)
-    return Response()
+    stripped_friend_name = data["friendName"].strip()
+    friend = await _database.fetch_one(user_table.select().where(user_table.columns.username == stripped_friend_name))
+    
+    if not friend:
+        return no_user_response
+        
+
+    try:
+        query = user_friends_table.insert().values(
+            userId=data['userId'],
+            friendId=friend.id
+        )
+        await _database.execute(query)
+    except:
+        return Response(content="%s is already on your friends list" % stripped_friend_name)
+        
+    content = {
+        "friendId": friend.id,
+        "username": stripped_friend_name
+    }
+
+    return JSONResponse(content)
 
 @app.route("/friends/delete", methods=["DELETE"])
 async def delete_friend(request) -> Response:
@@ -114,7 +142,7 @@ async def delete_friend(request) -> Response:
     query = user_friends_table.delete().where(
         user_friends_table.columns.friendId == data["friendId"] and
         user_friends_table.columns.userId == data["userId"])
-        
+
     await _database.execute(query)
     return Response()
 
