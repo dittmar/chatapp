@@ -75,7 +75,7 @@ async def login(request: Request) -> Response:
     invalid_credentials_response = Response(content="invalid username or password", status_code=400)
     try:
         data = await request.json()
-        if not ("username" in data and "password" in data):
+        if not ("username" in data and data["username"].strip() and "password" in data and data["password"].strip()):
             return invalid_credentials_response
     except:
         return invalid_credentials_response
@@ -114,7 +114,7 @@ async def create_user(request: Request) -> Response:
     """
     data = await request.json()
     # Return a Bad Request error if we're missing a username or password
-    if not ("username" in data and "password" in data):
+    if not ("username" in data and data["username"].strip() and "password" in data and data["password"].strip()):
         return Response(
             content="requires username and password",
             status_code=400
@@ -214,6 +214,9 @@ async def send_message(request: Request) -> Response:
                     schema: SendMessageParameter
     """
     data = await request.json()
+
+    if not("message" in data and data["message"].strip()):
+        return Response(content="message cannot be blank", status_code=400)
 
     query = message_table.insert().values(
         message=data["message"],
