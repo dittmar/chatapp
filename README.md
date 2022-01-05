@@ -1,2 +1,2 @@
 # chatapp
-SkySafe chat app project
+Simple chat app project server written in Python using Starlette, SQLAlchemy, and some other stuff
