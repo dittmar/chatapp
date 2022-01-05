@@ -175,9 +175,14 @@ async def list_messages(request: Request) -> JSONResponse:
     try:
         data = await request.json()
         # If we have a senderId and/or a receiverId, we want to filter the messages returned
-        # to only include ones for that sender and receiver pair
+        # to only include ones between that sender and receiver pair
         if "senderId" in data and "receiverId" in data:
-            query += "WHERE {} AND {}".format("senderId = :senderId", "receiverId = :receiverId")
+            query += "WHERE (senderId = :senderId AND receiverId = :receiverId) OR (senderId = :reverseSenderId AND receiverId = :reverseReceiverId)"
+            # I have to do this because otherwise fetch_all gets upset about only having two
+            # params for four substitutions, even though I'm only trying to use two substitutions
+            # twice each
+            data["reverseSenderId"] = data["receiverId"]
+            data["reverseReceiverId"] = data["senderId"]
         # If we don't have the right data, treat it like we have no data
         else:
             raise ValueError("Body must include both senderId and receiverId if it includes one of them")
@@ -189,8 +194,8 @@ async def list_messages(request: Request) -> JSONResponse:
     content = [
         {
             "message": result[0],
-            "senderId": result[1],
-            "receiverId": result[2]
+            "sender": result[1],
+            "receiver": result[2]
         }
         for result in results
     ]
