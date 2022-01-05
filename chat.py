@@ -10,7 +10,7 @@ from starlette.responses import JSONResponse
 from starlette.responses import Response
 from starlette_apispec import APISpecSchemaGenerator
 
-from schema import user_table, message_table
+from schema import user_table, message_table, user_friends_table
 
 # We need to import metadata so that the server will run happily
 from schema import metadata
@@ -24,6 +24,99 @@ app = Starlette(
     on_startup=[_database.connect],
     on_shutdown=[_database.disconnect]
 )
+
+@app.route("/friends/list/{userId}", methods=["GET"])
+async def list_friends(request) -> JSONResponse:
+    """
+        responses:
+            200:
+                description: return all of a user's friends
+                content:
+                    application/json:
+                        schema:
+                            type: array
+                            items:
+                                type: object
+                                properties:
+                                    id:
+                                        type: integer
+                                    username:
+                                        type: string
+    """
+    userId = request.path_params.get('userId')
+
+    query = """
+    SELECT friendId, username
+    FROM user_friends
+    JOIN users ON friendId = users.id
+    """
+    results = await _database.fetch_all(query=query)
+
+    content = [
+        {
+            "friendId": result[0],
+            "username": result[1]
+        }
+        for result in results
+    ]
+    return JSONResponse(content)
+
+@app.route("/friends/add", methods=["POST"])
+async def add_friend(request) -> Response:
+    """
+        requestBody:
+            required: true
+            content:
+                application/json:
+                        schema: UserFriendAddParameter
+        responses:
+            200:
+                description: user exists; added as friend
+            400:
+                description: friend user does not exist
+    """
+    try:
+        data = await request.json()
+        if not ("userId" in data and "friendName" in data and data["friendName"].strip()):
+            return Response(content="no such user exists", status_code=400)
+    except:
+        return Response(content="username of friend is required")
+
+    friend = await _database.fetch_one(user_table.select().where(user_table.columns.username == data["friendName"]))
+    query = user_friends_table.insert().values(
+        userId=data['userId'],
+        friendId=friend.id
+    )
+    await _database.execute(query)
+    return Response()
+
+@app.route("/friends/delete", methods=["DELETE"])
+async def delete_friend(request) -> Response:
+    """
+        requestBody:
+            required: true
+            content:
+                application/json:
+                        schema: UserFriendDeleteParameter
+        responses:
+            200:
+                description: friend found and deleted
+            400:
+                description: friend user does not exist
+    """
+    try:
+        data = await request.json()
+        if not ("userId" in data and "friendId" in data):
+            return Response(content="no such user exists", status_code=400)
+    except:
+        return Response(content="no friend to delete")
+
+    query = user_friends_table.delete().where(
+        user_friends_table.columns.friendId == data["friendId"] and
+        user_friends_table.columns.userId == data["userId"])
+        
+    await _database.execute(query)
+    return Response()
 
 @app.route("/users", methods=["GET"])
 async def list_users(request) -> JSONResponse:
@@ -235,6 +328,14 @@ class SendMessageParameter(Schema):
     message = fields.Str()
     senderId = fields.Int()
     receiverId = fields.Int(nullable=True)
+
+class UserFriendAddParameter(Schema):
+    userId = fields.Int()
+    friendName = fields.Str()
+
+class UserFriendDeleteParameter(Schema):
+    userId = fields.Int()
+    friendId = fields.Int()
 
 class UserParameter(Schema):
     username = fields.Str()
